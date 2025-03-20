@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/MapPoc/static/css/main.cce7917b.css",
+    "main.js": "/MapPoc/static/js/main.c8eea465.js",
+    "index.html": "/MapPoc/index.html",
+    "main.cce7917b.css.map": "/MapPoc/static/css/main.cce7917b.css.map",
+    "main.c8eea465.js.map": "/MapPoc/static/js/main.c8eea465.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.cce7917b.css",
+    "static/js/main.c8eea465.js"
+  ]
+}
