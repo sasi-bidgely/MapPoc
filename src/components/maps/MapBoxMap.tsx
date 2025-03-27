@@ -49,12 +49,16 @@ const MapBoxMap: React.FC = () => {
   const [drawnFeatures, setDrawnFeatures] = useState<Feature[]>([]);
   const popup = useRef<mapboxgl.Popup | null>(null);
   const [layerVisibility, setLayerVisibility] = useState<LayerControl[]>([
-    { id: 'cities-points', name: 'Cities', visible: true },
+    { id: 'clusters', name: 'City Clusters', visible: true },
+    { id: 'cluster-count', name: 'Cluster Counts', visible: true },
+    { id: 'unclustered-point', name: 'Cities', visible: true },
     { id: 'cities-labels', name: 'City Labels', visible: true },
+    { id: 'cities-airport-counts', name: 'Airport Counts', visible: true },
     { id: 'airports-points', name: 'Airports', visible: true },
     { id: 'airports-labels', name: 'Airport Labels', visible: true },
     { id: 'routes-lines', name: 'Routes', visible: true },
-    { id: 'airport-routes-lines', name: 'Airport Routes', visible: true }
+    { id: 'airport-routes-lines', name: 'Airport Routes', visible: true },
+    { id: 'airport-routes-arrows', name: 'Route Arrows', visible: true }
   ]);
   const [isRegionFiltered, setIsRegionFiltered] = useState(false);
 
@@ -612,7 +616,10 @@ const MapBoxMap: React.FC = () => {
       // Re-add sources
       map.current.addSource('cities', {
         type: 'geojson',
-        data: citiesGeoJSON as FeatureCollection<Point>
+        data: citiesGeoJSON as FeatureCollection<Point>,
+        cluster: true,
+        clusterMaxZoom: 6,
+        clusterRadius: 50
       });
 
       map.current.addSource('routes', {
@@ -643,25 +650,59 @@ const MapBoxMap: React.FC = () => {
       });
 
       map.current.addLayer({
-        id: 'cities-points',
+        id: 'clusters',
         type: 'circle',
         source: 'cities',
+        filter: ['has', 'point_count'],
         paint: {
-          'circle-radius': 8,
-          'circle-color': '#00FF00',
+          'circle-color': [
+            'step',
+            ['get', 'point_count'],
+            '#51bbd6',
+            100,
+            '#f1f075',
+            750,
+            '#f28cb1'
+          ],
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            20,
+            100,
+            30,
+            750,
+            40
+          ],
+          'circle-opacity': 0.8,
           'circle-stroke-width': 2,
-          'circle-stroke-color': '#FFFFFF'
+          'circle-stroke-color': '#fff',
+          'circle-stroke-opacity': 0.5
         }
       });
 
       map.current.addLayer({
-        id: 'airports-points',
-        type: 'circle',
-        source: 'airports',
-        minzoom: 8,
+        id: 'cluster-count',
+        type: 'symbol',
+        source: 'cities',
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': '{point_count_abbreviated}',
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 12
+        },
         paint: {
-          'circle-radius': 6,
-          'circle-color': '#0000FF',
+          'text-color': '#ffffff'
+        }
+      });
+
+      map.current.addLayer({
+        id: 'unclustered-point',
+        type: 'circle',
+        source: 'cities',
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-color': '#00FF00',
+          'circle-radius': 8,
           'circle-stroke-width': 2,
           'circle-stroke-color': '#FFFFFF'
         }
@@ -671,6 +712,8 @@ const MapBoxMap: React.FC = () => {
         id: 'cities-labels',
         type: 'symbol',
         source: 'cities',
+        filter: ['!', ['has', 'point_count']],
+        minzoom: 6,
         layout: {
           'text-field': ['get', 'name'],
           'text-size': 12,
@@ -682,10 +725,23 @@ const MapBoxMap: React.FC = () => {
       });
 
       map.current.addLayer({
+        id: 'airports-points',
+        type: 'circle',
+        source: 'airports',
+        minzoom: 6, // Show when zoomed in
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#0000FF',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#FFFFFF'
+        }
+      });
+
+      map.current.addLayer({
         id: 'airports-labels',
         type: 'symbol',
         source: 'airports',
-        minzoom: 8,
+        minzoom: 6, // Show when zoomed in
         layout: {
           'text-field': ['get', 'code'],
           'text-size': 10,
@@ -700,12 +756,32 @@ const MapBoxMap: React.FC = () => {
         id: 'airport-routes-lines',
         type: 'line',
         source: 'airport-routes',
-        minzoom: 8,
+        minzoom: 6, // Show when zoomed in
         paint: {
           'line-color': '#0000FF',
           'line-width': 2,
           'line-opacity': 0.6,
           'line-dasharray': [2, 2]
+        }
+      });
+
+      // Add directional arrows for airport routes
+      map.current.addLayer({
+        id: 'airport-routes-arrows',
+        type: 'symbol',
+        source: 'airport-routes',
+        minzoom: 6,
+        layout: {
+          'symbol-placement': 'line-center',
+          'text-field': '▶',
+          'text-size': 12,
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+          'text-rotate': 0
+        },
+        paint: {
+          'text-color': '#0000FF',
+          'text-opacity': 0.8
         }
       });
 
@@ -723,11 +799,29 @@ const MapBoxMap: React.FC = () => {
         if (!map.current || !popup.current) return;
 
         const features = map.current.queryRenderedFeatures(e.point, {
-          layers: ['cities-points', 'airports-points', 'routes-lines', 'airport-routes-lines']
+          layers: ['clusters', 'unclustered-point', 'airports-points', 'routes-lines', 'airport-routes-lines']
         });
 
         if (features.length > 0) {
           const feature = features[0];
+          
+          // Handle cluster clicks
+          if (feature.properties?.cluster) {
+            const clusterId = feature.properties.cluster_id;
+            const mapboxSource = map.current?.getSource('cities') as mapboxgl.GeoJSONSource;
+            mapboxSource.getClusterExpansionZoom(
+              clusterId,
+              (err: any, zoom: number | null | undefined) => {
+                if (err || !zoom) return;
+                map.current?.easeTo({
+                  center: (feature.geometry as Point).coordinates as [number, number],
+                  zoom: zoom
+                });
+              }
+            );
+            return;
+          }
+
           setSelectedFeature(feature);
           setInfoBarContent(feature.properties as FeatureProperties);
           setShowInfoBar(true);
@@ -739,8 +833,9 @@ const MapBoxMap: React.FC = () => {
               ${feature.properties?.population ? `<p>Population: ${feature.properties.population.toLocaleString()}</p>` : ''}
               ${feature.properties?.code ? `<p>Code: ${feature.properties.code}</p>` : ''}
               ${feature.properties?.distance ? `<p>Distance: ${feature.properties.distance} miles</p>` : ''}
+              ${feature.properties?.airportCount ? `<p>Airports: ${feature.properties.airportCount}</p>` : ''}
               <p>${feature.properties?.description || ''}</p>
-              ${feature.layer?.id === 'cities-points' ? `
+              ${feature.layer?.id === 'unclustered-point' ? `
                 <button id="filter-button" data-action="filter" data-city="${feature.properties?.name}" style="
                   background-color: ${isFiltered ? '#ff4444' : '#4CAF50'};
                   color: white;

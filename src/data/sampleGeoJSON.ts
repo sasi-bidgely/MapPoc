@@ -4,6 +4,7 @@ interface CityProperties {
   name: string;
   population: number;
   description: string;
+  airportCount: number;
 }
 
 interface RouteProperties {
@@ -29,7 +30,8 @@ export const citiesGeoJSON: FeatureCollection<Point, CityProperties> = {
       properties: {
         name: "New York City",
         population: 8336817,
-        description: "The most populous city in the United States"
+        description: "The most populous city in the United States",
+        airportCount: 3
       },
       geometry: {
         type: "Point",
@@ -41,7 +43,8 @@ export const citiesGeoJSON: FeatureCollection<Point, CityProperties> = {
       properties: {
         name: "Philadelphia",
         population: 1603797,
-        description: "The sixth-largest city in the United States"
+        description: "The sixth-largest city in the United States",
+        airportCount: 2
       },
       geometry: {
         type: "Point",
@@ -53,7 +56,8 @@ export const citiesGeoJSON: FeatureCollection<Point, CityProperties> = {
       properties: {
         name: "Boston",
         population: 675647,
-        description: "The capital and largest city of Massachusetts"
+        description: "The capital and largest city of Massachusetts",
+        airportCount: 2
       },
       geometry: {
         type: "Point",
@@ -65,7 +69,8 @@ export const citiesGeoJSON: FeatureCollection<Point, CityProperties> = {
       properties: {
         name: "Washington DC",
         population: 689545,
-        description: "The capital of the United States"
+        description: "The capital of the United States",
+        airportCount: 2
       },
       geometry: {
         type: "Point",
